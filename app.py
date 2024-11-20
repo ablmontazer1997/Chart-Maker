@@ -8,19 +8,74 @@ import plotly.express as px
 import os
 from datetime import datetime
 
+
+def load_custom_fonts():
+    """Load custom fonts from the fonts directory"""
+    font_dir = "fonts"
+    if os.path.exists(font_dir):
+        # Load all fonts from the fonts directory
+        custom_fonts = []
+        for font_file in os.listdir(font_dir):
+            if font_file.endswith(('.ttf', '.otf')):
+                font_path = os.path.join(font_dir, font_file)
+                try:
+                    # Add font to matplotlib
+                    fm.fontManager.addfont(font_path)
+                    # Get font family name
+                    font = fm.FontProperties(fname=font_path)
+                    custom_fonts.append(font.get_name())
+                except Exception as e:
+                    st.warning(f"Failed to load font {font_file}: {str(e)}")
+        return custom_fonts
+    return []
+
+
 # Page config
-st.set_page_config(page_title="Chart Creator", layout="wide")
+st.set_page_config(page_title="Chart Creator (Abolfazl Montazer)", layout="wide")
 
 def init_session_state():
     """Initialize session state variables"""
     if 'df' not in st.session_state:
         st.session_state.df = None
     if 'system_fonts' not in st.session_state:
-        st.session_state.system_fonts = sorted(list(set([f.name for f in fm.fontManager.ttflist])))
+        # Get system fonts
+        system_fonts = sorted(list(set([f.name for f in fm.fontManager.ttflist])))
+        # Add custom fonts
+        custom_fonts = load_custom_fonts()
+        # Combine and sort all fonts
+        all_fonts = sorted(list(set(system_fonts + custom_fonts)))
+        st.session_state.system_fonts = all_fonts
     if 'chart_type' not in st.session_state:
         st.session_state.chart_type = 'bar'
     if 'current_chart' not in st.session_state:
         st.session_state.current_chart = None
+# Add custom CSS to support custom fonts
+def add_custom_css():
+    font_dir = "fonts"
+    if os.path.exists(font_dir):
+        css = """
+        <style>
+        """
+        for font_file in os.listdir(font_dir):
+            if font_file.endswith(('.ttf', '.otf')):
+                font_name = os.path.splitext(font_file)[0]
+                font_path = os.path.join(font_dir, font_file)
+                css += f"""
+                @font-face {{
+                    font-family: '{font_name}';
+                    src: url('data:font/truetype;charset=utf-8;base64,{get_font_base64(font_path)}') format('truetype');
+                }}
+                """
+        css += """
+        </style>
+        """
+        st.markdown(css, unsafe_allow_html=True)
+
+def get_font_base64(font_path):
+    """Convert font file to base64"""
+    with open(font_path, "rb") as font_file:
+        return base64.b64encode(font_file.read()).decode()
+
 
 def process_data(df, settings):
     """Process data based on aggregation settings"""
