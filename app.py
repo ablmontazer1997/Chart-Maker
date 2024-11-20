@@ -10,14 +10,20 @@ from datetime import datetime
 
 
 def load_custom_fonts():
-    """Load custom fonts from the fonts directory"""
+    """Load Persian and custom fonts from the fonts directory"""
     font_dir = "fonts"
     if os.path.exists(font_dir):
-        # Load all fonts from the fonts directory
         custom_fonts = []
-        for font_file in os.listdir(font_dir):
-            if font_file.endswith(('.ttf', '.otf')):
-                font_path = os.path.join(font_dir, font_file)
+        # Persian fonts
+        persian_fonts = {
+            "BNazanin": "BNazanin.ttf",
+            "IRANYekanXFaNum": "IRANYekanXFaNum-Medium.ttf",
+            "Inter": "Inter_24pt-Medium.ttf"
+        }
+        
+        for font_name, font_file in persian_fonts.items():
+            font_path = os.path.join(font_dir, font_file)
+            if os.path.exists(font_path):
                 try:
                     # Add font to matplotlib
                     fm.fontManager.addfont(font_path)
@@ -26,6 +32,18 @@ def load_custom_fonts():
                     custom_fonts.append(font.get_name())
                 except Exception as e:
                     st.warning(f"Failed to load font {font_file}: {str(e)}")
+                    
+        # Add any additional fonts in the directory
+        for font_file in os.listdir(font_dir):
+            if font_file.endswith(('.ttf', '.otf')) and font_file not in persian_fonts.values():
+                font_path = os.path.join(font_dir, font_file)
+                try:
+                    fm.fontManager.addfont(font_path)
+                    font = fm.FontProperties(fname=font_path)
+                    custom_fonts.append(font.get_name())
+                except Exception as e:
+                    st.warning(f"Failed to load font {font_file}: {str(e)}")
+                    
         return custom_fonts
     return []
 
@@ -34,13 +52,12 @@ def load_custom_fonts():
 st.set_page_config(page_title="Chart Creator (Abolfazl Montazer)", layout="wide")
 
 def init_session_state():
-    """Initialize session state variables"""
     if 'df' not in st.session_state:
         st.session_state.df = None
     if 'system_fonts' not in st.session_state:
         # Get system fonts
         system_fonts = sorted(list(set([f.name for f in fm.fontManager.ttflist])))
-        # Add custom fonts
+        # Add Persian fonts
         custom_fonts = load_custom_fonts()
         # Combine and sort all fonts
         all_fonts = sorted(list(set(system_fonts + custom_fonts)))
@@ -49,32 +66,46 @@ def init_session_state():
         st.session_state.chart_type = 'bar'
     if 'current_chart' not in st.session_state:
         st.session_state.current_chart = None
+
 # Add custom CSS to support custom fonts
 def add_custom_css():
+    """Add custom CSS for Persian fonts"""
     font_dir = "fonts"
     if os.path.exists(font_dir):
         css = """
         <style>
-        """
-        for font_file in os.listdir(font_dir):
-            if font_file.endswith(('.ttf', '.otf')):
-                font_name = os.path.splitext(font_file)[0]
-                font_path = os.path.join(font_dir, font_file)
-                css += f"""
-                @font-face {{
-                    font-family: '{font_name}';
-                    src: url('data:font/truetype;charset=utf-8;base64,{get_font_base64(font_path)}') format('truetype');
-                }}
-                """
-        css += """
+        @font-face {
+            font-family: 'BNazanin';
+            src: url('data:font/truetype;charset=utf-8;base64,%s') format('truetype');
+        }
+        @font-face {
+            font-family: 'IRANYekanXFaNum';
+            src: url('data:font/truetype;charset=utf-8;base64,%s') format('truetype');
+        }
+        @font-face {
+            font-family: 'Inter';
+            src: url('data:font/truetype;charset=utf-8;base64,%s') format('truetype');
+        }
+        .stMarkdown {
+            font-family: 'IRANYekanXFaNum', 'BNazanin', 'Inter', sans-serif;
+        }
         </style>
-        """
+        """ % (
+            get_font_base64(os.path.join(font_dir, "BNazanin.ttf")),
+            get_font_base64(os.path.join(font_dir, "IRANYekanXFaNum-Medium.ttf")),
+            get_font_base64(os.path.join(font_dir, "Inter_24pt-Medium.ttf"))
+        )
         st.markdown(css, unsafe_allow_html=True)
 
 def get_font_base64(font_path):
     """Convert font file to base64"""
-    with open(font_path, "rb") as font_file:
-        return base64.b64encode(font_file.read()).decode()
+    import base64
+    try:
+        with open(font_path, "rb") as font_file:
+            return base64.b64encode(font_file.read()).decode()
+    except Exception as e:
+        st.warning(f"Failed to load font {font_path}: {str(e)}")
+        return ""
 
 
 def process_data(df, settings):
