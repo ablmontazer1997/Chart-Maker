@@ -18,7 +18,8 @@ def load_custom_fonts():
         persian_fonts = {
             "BNazanin": "BNazanin.ttf",
             "IRANYekanXFaNum": "IRANYekanXFaNum-Medium.ttf",
-            "Inter": "Inter_24pt-Medium.ttf"
+            "Inter": "Inter_24pt-Medium.ttf",
+            "Pangram Sans": "PPPangramSansRounded-Medium.otf"
         }
         
         for font_name, font_file in persian_fonts.items():
@@ -86,14 +87,20 @@ def add_custom_css():
             font-family: 'Inter';
             src: url('data:font/truetype;charset=utf-8;base64,%s') format('truetype');
         }
+        @font-face {
+            font-family: 'Pangram Sans';
+            src: url('data:font/truetype;charset=utf-8;base64,%s') format('truetype');
+        }
         .stMarkdown {
-            font-family: 'IRANYekanXFaNum', 'BNazanin', 'Inter', sans-serif;
+            font-family: 'IRANYekanXFaNum', 'BNazanin', 'Inter', sans-serif,'Pangram Sans';
         }
         </style>
         """ % (
             get_font_base64(os.path.join(font_dir, "BNazanin.ttf")),
             get_font_base64(os.path.join(font_dir, "IRANYekanXFaNum-Medium.ttf")),
-            get_font_base64(os.path.join(font_dir, "Inter_24pt-Medium.ttf"))
+            get_font_base64(os.path.join(font_dir, "Inter_24pt-Medium.ttf")),
+            get_font_base64(os.path.join(font_dir, "PPPangramSansRounded-Medium.otf"))
+
         )
         st.markdown(css, unsafe_allow_html=True)
 
