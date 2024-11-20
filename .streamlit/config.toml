@@ -3,7 +3,7 @@ primaryColor = "#f00f5a"
 backgroundColor = "#181818"
 secondaryBackgroundColor = "#1F1F1F"
 textColor = "#fcfcfd"
-font = "sans serif"
+font = "PPPangramSansRounded-Medium"
 
 [server]
 maxUploadSize = 200
