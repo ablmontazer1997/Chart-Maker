@@ -1,6 +1,9 @@
-# .gitignore
 __pycache__/
 *.pyc
 .env
 .DS_Store
 exports/
+venv/
+*.log
+# Don't ignore fonts directory
+!fonts/
