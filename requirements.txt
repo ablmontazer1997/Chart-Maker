@@ -1,0 +1,10 @@
+streamlit
+pandas
+altair
+numpy
+matplotlib
+plotly
+pillow
+vl-convert-python
+kaleido
+openpyxl
