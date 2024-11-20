@@ -8,7 +8,8 @@ def setup_fonts():
     fonts = [
         "BNazanin.ttf",
         "IRANYekanXFaNum-Medium.ttf",
-        "Inter_24pt-Medium.ttf"
+        "Inter_24pt-Medium.ttf",
+        "PPPangramSansRounded-Medium.otf"
     ]
     
     # Ensure fonts directory exists
@@ -32,6 +33,7 @@ def verify_fonts():
         "BNazanin.ttf",
         "IRANYekanXFaNum-Medium.ttf",
         "Inter_24pt-Medium.ttf"
+        "PPPangramSansRounded-Medium.otf"
     ]
     
     missing_fonts = []
