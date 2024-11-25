@@ -853,15 +853,10 @@ def save_chart(chart, format_type, ppi=None, scale_factor=None):
 
         if isinstance(chart, (alt.Chart, alt.LayerChart)):
             try:
-                # Get the font settings from the original chart
-                chart_config = chart.to_dict(format="vega").get('config', {})
-                font_family = chart_config.get('font', 'Arial')
-                
-                # Convert to Vega spec with format="vega"
+                # Get the Vega spec with format="vega"
                 vega_spec = chart.to_dict(format="vega")
                 
                 if format_type == 'html':
-                    # Create HTML with embedded Vega spec
                     html_template = """
                     <!DOCTYPE html>
                     <html>
@@ -891,7 +886,7 @@ def save_chart(chart, format_type, ppi=None, scale_factor=None):
                     base_width = 800
                     base_height = 500
                     
-                    # Calculate dimensions
+                    # Calculate scale
                     if scale_factor is not None:
                         scale = scale_factor
                     elif ppi is not None:
@@ -899,29 +894,22 @@ def save_chart(chart, format_type, ppi=None, scale_factor=None):
                     else:
                         scale = 1
 
-                    # Update the Vega spec with the font family
-                    if 'config' not in vega_spec:
-                        vega_spec['config'] = {}
-                    vega_spec['config']['font'] = font_family
-                    
-                    # Calculate the output dimensions
-                    width = int(base_width * scale)
-                    height = int(base_height * scale)
-                    
-                    # Add background color to the Vega spec if not present
+                    # Ensure white background
                     if 'background' not in vega_spec:
                         vega_spec['background'] = 'white'
                     
-                    # Convert to PNG with the calculated scale
                     try:
-                        return vlc.vega_to_png(
-                            spec=vega_spec,
-                            scale=scale
-                        )
+                        # Pass the vega_spec directly as first argument
+                        return vlc.vega_to_png(vega_spec, scale=scale)
                     except Exception as png_error:
                         st.error(f"PNG conversion error: {str(png_error)}")
                         # Fallback attempt without scaling
-                        return vlc.vega_to_png(vega_spec)
+                        try:
+                            return vlc.vega_to_png(vega_spec)
+                        except Exception as fallback_error:
+                            # Try vegalite as last resort
+                            vegalite_spec = chart.to_dict()
+                            return vlc.vegalite_to_png(vegalite_spec)
                     
             except Exception as vega_error:
                 st.error(f"VegaFusion export error: {str(vega_error)}")
@@ -936,7 +924,7 @@ def save_chart(chart, format_type, ppi=None, scale_factor=None):
             else:  # svg or png
                 buffer = io.BytesIO()
                 
-                # Update layout to ensure white background
+                # Ensure white background
                 chart.update_layout(
                     plot_bgcolor='white',
                     paper_bgcolor='white'
@@ -956,10 +944,7 @@ def save_chart(chart, format_type, ppi=None, scale_factor=None):
             
     except Exception as e:
         st.error(f"Error preparing chart for download: {str(e)}")
-        return None
-
-
-        
+        return None        
 
 def main():
     setup_altair()
