@@ -840,79 +840,42 @@ def get_chart_settings(chart_type):
         return settings
 
 def save_chart(chart, format_type, ppi=None, scale_factor=None):
-    """Save chart using vl-convert-python with VegaFusion support"""
+    """Save chart using Altair's native save methods"""
     try:
         import io
-        import base64
         
-        try:
-            import vl_convert as vlc
-        except ImportError:
-            st.error("Please install vl-convert-python for image export.")
-            return None
-
         if isinstance(chart, (alt.Chart, alt.LayerChart)):
             try:
-                # Get the Vega spec with format="vega"
-                vega_spec = chart.to_dict(format="vega")
-                
                 if format_type == 'html':
-                    html_template = """
-                    <!DOCTYPE html>
-                    <html>
-                    <head>
-                        <script src="https://cdn.jsdelivr.net/npm/vega@5"></script>
-                        <script src="https://cdn.jsdelivr.net/npm/vega-embed@6"></script>
-                        <style>
-                            body {{ margin: 0; padding: 20px; background: white; }}
-                            #vis {{ width: 100%; height: 100%; background: white; }}
-                        </style>
-                    </head>
-                    <body>
-                        <div id="vis"></div>
-                        <script>
-                            vegaEmbed('#vis', {spec}, {{renderer: 'canvas', actions: true}});
-                        </script>
-                    </body>
-                    </html>
-                    """.format(spec=vega_spec)
-                    return html_template.encode('utf-8')
+                    # Use Altair's html saving
+                    buffer = io.StringIO()
+                    chart.save(buffer, format='html')
+                    return buffer.getvalue().encode('utf-8')
                 
                 elif format_type == 'svg':
-                    content = vlc.vega_to_svg(vega_spec)
-                    return content.encode('utf-8')
+                    # Use Altair's svg saving
+                    buffer = io.StringIO()
+                    chart.save(buffer, format='svg')
+                    return buffer.getvalue().encode('utf-8')
                 
                 else:  # png
-                    base_width = 800
-                    base_height = 500
+                    # Use Altair's png saving
+                    buffer = io.BytesIO()
                     
-                    # Calculate scale
-                    if scale_factor is not None:
-                        scale = scale_factor
-                    elif ppi is not None:
-                        scale = ppi / 72  # Convert PPI to scale factor
-                    else:
-                        scale = 1
-
-                    # Ensure white background
-                    if 'background' not in vega_spec:
-                        vega_spec['background'] = 'white'
+                    # Apply scaling if needed
+                    if scale_factor is not None or ppi is not None:
+                        scale = scale_factor if scale_factor is not None else ppi/72
+                        chart = chart.properties(
+                            width=chart.width * scale,
+                            height=chart.height * scale
+                        )
                     
-                    try:
-                        # Pass the vega_spec directly as first argument
-                        return vlc.vega_to_png(vega_spec, scale=scale)
-                    except Exception as png_error:
-                        st.error(f"PNG conversion error: {str(png_error)}")
-                        # Fallback attempt without scaling
-                        try:
-                            return vlc.vega_to_png(vega_spec)
-                        except Exception as fallback_error:
-                            # Try vegalite as last resort
-                            vegalite_spec = chart.to_dict()
-                            return vlc.vegalite_to_png(vegalite_spec)
+                    chart.save(buffer, format='png')
+                    buffer.seek(0)
+                    return buffer.getvalue()
                     
-            except Exception as vega_error:
-                st.error(f"VegaFusion export error: {str(vega_error)}")
+            except Exception as save_error:
+                st.error(f"Save error: {str(save_error)}")
                 return None
                     
         else:  # Plotly chart
@@ -924,7 +887,7 @@ def save_chart(chart, format_type, ppi=None, scale_factor=None):
             else:  # svg or png
                 buffer = io.BytesIO()
                 
-                # Ensure white background
+                # Update layout to ensure white background
                 chart.update_layout(
                     plot_bgcolor='white',
                     paper_bgcolor='white'
@@ -944,7 +907,8 @@ def save_chart(chart, format_type, ppi=None, scale_factor=None):
             
     except Exception as e:
         st.error(f"Error preparing chart for download: {str(e)}")
-        return None        
+        return None
+   
 
 def main():
     setup_altair()
@@ -1036,6 +1000,7 @@ def main():
                     mime=mime_type,
                     use_container_width=True
                 )
+
 
     # Right column - Chart Preview
     with right_col:
