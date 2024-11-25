@@ -14,11 +14,10 @@ from datetime import datetime
 def setup_altair():
     """Configure Altair for handling large datasets with VegaFusion"""
     try:
-        # Enable vegafusion transformer with specific configuration
-        alt.data_transformers.enable(
-            'vegafusion',
-            strict=False  # Allow fallback to default transformer if needed
-        )
+        # Enable vegafusion transformer without strict parameter
+        alt.data_transformers.enable('vegafusion')
+        # Set the max rows to None to handle large datasets
+        alt.data_transformers.disable_max_rows()
     except (ValueError, ImportError) as e:
         st.warning("VegaFusion not available, falling back to default transformer")
         # Fallback configuration
@@ -857,24 +856,44 @@ def save_chart(chart, format_type, ppi=None, scale_factor=None):
 
         # Create buffer for the chart
         if isinstance(chart, (alt.Chart, alt.LayerChart)):
-            if format_type == 'html':
-                content = chart.to_html(inline=True)
-                return content.encode('utf-8')
-            elif format_type in ['svg', 'png']:
-                # Use format="vega" when VegaFusion is enabled
-                spec = chart.to_dict(format="vega")
-                
-                if format_type == 'svg':
-                    content = vlc.vega_to_svg(spec)  # Note: changed from vegalite_to_svg
+            try:
+                if format_type == 'html':
+                    content = chart.to_html(inline=True)
                     return content.encode('utf-8')
-                else:  # png
-                    vl_options = {}
-                    if ppi is not None:
-                        vl_options['ppi'] = ppi
-                    if scale_factor is not None:
-                        vl_options['scale_factor'] = scale_factor
+                elif format_type in ['svg', 'png']:
+                    # Use format="vega" when VegaFusion is enabled
+                    spec = chart.to_dict(format="vega")
                     
-                    return vlc.vega_to_png(spec, **vl_options)  # Note: changed from vegalite_to_png
+                    if format_type == 'svg':
+                        content = vlc.vega_to_svg(spec)
+                        return content.encode('utf-8')
+                    else:  # png
+                        vl_options = {}
+                        if ppi is not None:
+                            vl_options['ppi'] = ppi
+                        if scale_factor is not None:
+                            vl_options['scale_factor'] = scale_factor
+                        
+                        return vlc.vega_to_png(spec, **vl_options)
+            except Exception as e:
+                # If vega format fails, try without format specification
+                if format_type == 'html':
+                    content = chart.to_html(inline=True)
+                    return content.encode('utf-8')
+                elif format_type in ['svg', 'png']:
+                    spec = chart.to_dict()
+                    
+                    if format_type == 'svg':
+                        content = vlc.vegalite_to_svg(spec)
+                        return content.encode('utf-8')
+                    else:  # png
+                        vl_options = {}
+                        if ppi is not None:
+                            vl_options['ppi'] = ppi
+                        if scale_factor is not None:
+                            vl_options['scale_factor'] = scale_factor
+                        
+                        return vlc.vegalite_to_png(spec, **vl_options)
         else:  # Plotly chart
             if format_type == 'html':
                 buffer = io.StringIO()
@@ -893,6 +912,7 @@ def save_chart(chart, format_type, ppi=None, scale_factor=None):
     except Exception as e:
         st.error(f"Error preparing chart for download: {str(e)}")
         return None
+
 
 
 
