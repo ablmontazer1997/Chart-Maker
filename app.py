@@ -5,62 +5,43 @@ import numpy as np
 import matplotlib.font_manager as fm
 import plotly.graph_objects as go
 import plotly.express as px
+from plotly.subplots import make_subplots
 import os
 from datetime import datetime
 
-
 def load_custom_fonts():
-    """Load Persian and custom fonts from the fonts directory"""
+    """Load custom fonts from the fonts directory"""
     font_dir = "fonts"
     if os.path.exists(font_dir):
         custom_fonts = []
-        # Persian fonts
-        persian_fonts = {
+        # Custom fonts dictionary
+        custom_fonts_dict = {
             "BNazanin": "BNazanin.ttf",
             "IRANYekanXFaNum": "IRANYekanXFaNum-Medium.ttf",
             "Inter": "Inter_24pt-Medium.ttf",
             "Pangram Sans": "PPPangramSansRounded-Medium.otf"
         }
         
-        for font_name, font_file in persian_fonts.items():
+        for font_name, font_file in custom_fonts_dict.items():
             font_path = os.path.join(font_dir, font_file)
             if os.path.exists(font_path):
                 try:
-                    # Add font to matplotlib
-                    fm.fontManager.addfont(font_path)
-                    # Get font family name
-                    font = fm.FontProperties(fname=font_path)
-                    custom_fonts.append(font.get_name())
-                except Exception as e:
-                    st.warning(f"Failed to load font {font_file}: {str(e)}")
-                    
-        # Add any additional fonts in the directory
-        for font_file in os.listdir(font_dir):
-            if font_file.endswith(('.ttf', '.otf')) and font_file not in persian_fonts.values():
-                font_path = os.path.join(font_dir, font_file)
-                try:
                     fm.fontManager.addfont(font_path)
                     font = fm.FontProperties(fname=font_path)
                     custom_fonts.append(font.get_name())
                 except Exception as e:
                     st.warning(f"Failed to load font {font_file}: {str(e)}")
-                    
+        
         return custom_fonts
     return []
 
-
-# Page config
-st.set_page_config(page_title="Chart Creator (Abolfazl Montazer)", layout="wide")
-
 def init_session_state():
+    """Initialize session state variables"""
     if 'df' not in st.session_state:
         st.session_state.df = None
     if 'system_fonts' not in st.session_state:
-        # Get system fonts
         system_fonts = sorted(list(set([f.name for f in fm.fontManager.ttflist])))
-        # Add Persian fonts
         custom_fonts = load_custom_fonts()
-        # Combine and sort all fonts
         all_fonts = sorted(list(set(system_fonts + custom_fonts)))
         st.session_state.system_fonts = all_fonts
     if 'chart_type' not in st.session_state:
@@ -68,82 +49,785 @@ def init_session_state():
     if 'current_chart' not in st.session_state:
         st.session_state.current_chart = None
 
-# Add custom CSS to support custom fonts
-def add_custom_css():
-    """Add custom CSS for Persian fonts"""
-    font_dir = "fonts"
-    if os.path.exists(font_dir):
-        css = """
-        <style>
-        @font-face {
-            font-family: 'BNazanin';
-            src: url('data:font/truetype;charset=utf-8;base64,%s') format('truetype');
-        }
-        @font-face {
-            font-family: 'IRANYekanXFaNum';
-            src: url('data:font/truetype;charset=utf-8;base64,%s') format('truetype');
-        }
-        @font-face {
-            font-family: 'Inter';
-            src: url('data:font/truetype;charset=utf-8;base64,%s') format('truetype');
-        }
-        @font-face {
-            font-family: 'Pangram Sans';
-            src: url('data:font/truetype;charset=utf-8;base64,%s') format('truetype');
-        }
-        .stMarkdown {
-            font-family: 'IRANYekanXFaNum', 'BNazanin', 'Inter', sans-serif,'Pangram Sans';
-        }
-        </style>
-        """ % (
-            get_font_base64(os.path.join(font_dir, "BNazanin.ttf")),
-            get_font_base64(os.path.join(font_dir, "IRANYekanXFaNum-Medium.ttf")),
-            get_font_base64(os.path.join(font_dir, "Inter_24pt-Medium.ttf")),
-            get_font_base64(os.path.join(font_dir, "PPPangramSansRounded-Medium.otf"))
-
-        )
-        st.markdown(css, unsafe_allow_html=True)
-
-def get_font_base64(font_path):
-    """Convert font file to base64"""
-    import base64
-    try:
-        with open(font_path, "rb") as font_file:
-            return base64.b64encode(font_file.read()).decode()
-    except Exception as e:
-        st.warning(f"Failed to load font {font_path}: {str(e)}")
-        return ""
-
-
 def process_data(df, settings):
     """Process data based on aggregation settings"""
     if df is None:
         return None
+    
+    try:
+        # Create a copy to avoid modifying original data
+        processed_df = df.copy()
         
-    # Apply Top N / Bottom N filter
-    if settings.get('filter_type') == 'Top N':
-        df = df.nlargest(settings['filter_n'], settings['value_column'])
-    elif settings.get('filter_type') == 'Bottom N':
-        df = df.nsmallest(settings['filter_n'], settings['value_column'])
+        # Apply Top N / Bottom N filter
+        if settings.get('filter_type') == 'Top N':
+            processed_df = processed_df.nlargest(settings['filter_n'], settings['value_column'])
+        elif settings.get('filter_type') == 'Bottom N':
+            processed_df = processed_df.nsmallest(settings['filter_n'], settings['value_column'])
         
-    # Apply aggregation
-    if settings.get('aggregation') == 'Sum':
-        df = df.groupby(settings['category_column'])[settings['value_column']].sum().reset_index()
-    elif settings.get('aggregation') == 'Average':
-        df = df.groupby(settings['category_column'])[settings['value_column']].mean().reset_index()
-    elif settings.get('aggregation') == 'Count':
-        df = df.groupby(settings['category_column']).size().reset_index(name=settings['value_column'])
-    elif settings.get('aggregation') == 'Count (Non-Empty)':
-        df = df.groupby(settings['category_column'])[settings['value_column']].count().reset_index()
+        # Apply aggregation
+        if settings.get('aggregation') != 'None':
+            if settings['aggregation'] == 'Sum':
+                processed_df = processed_df.groupby(settings['category_column'])[settings['value_column']].sum().reset_index()
+            elif settings['aggregation'] == 'Average':
+                processed_df = processed_df.groupby(settings['category_column'])[settings['value_column']].mean().reset_index()
+            elif settings['aggregation'] == 'Count':
+                processed_df = processed_df.groupby(settings['category_column']).size().reset_index(name=settings['value_column'])
+            elif settings['aggregation'] == 'Count (Non-Empty)':
+                processed_df = processed_df.groupby(settings['category_column'])[settings['value_column']].count().reset_index()
         
-    return df
+        return processed_df
+    
+    except Exception as e:
+        st.error(f"Error processing data: {str(e)}")
+        return None
+
+def create_bar_chart(df, settings):
+    """Create bar chart with improved styling"""
+    try:
+        # Process data
+        df = process_data(df, settings)
+        if df is None:
+            return None
+        
+        # Sort data
+        df_sorted = df.sort_values(by=settings['value_column'], ascending=False)
+        
+        # Configure axes based on orientation
+        if settings['orientation'] == "vertical":
+            x_axis = alt.X(
+                f'{settings["category_column"]}:N',
+                title=settings['category_column'],
+                sort=df_sorted[settings['category_column']].tolist(),
+                axis=alt.Axis(
+                    labelFont=settings['font_family'],
+                    labelFontSize=settings['font_size'],
+                    titleFont=settings['font_family'],
+                    titleFontSize=settings['font_size'],
+                    labelAngle=settings['label_angle']
+                )
+            )
+            y_axis = alt.Y(
+                f'{settings["value_column"]}:Q',
+                title=settings['value_column'],
+                axis=alt.Axis(
+                    labelFont=settings['font_family'],
+                    labelFontSize=settings['font_size'],
+                    titleFont=settings['font_family'],
+                    titleFontSize=settings['font_size']
+                )
+            )
+        else:
+            y_axis = alt.Y(
+                f'{settings["category_column"]}:N',
+                title=settings['category_column'],
+                sort=df_sorted[settings['category_column']].tolist(),
+                axis=alt.Axis(
+                    labelFont=settings['font_family'],
+                    labelFontSize=settings['font_size'],
+                    titleFont=settings['font_family'],
+                    titleFontSize=settings['font_size'],
+                    labelAngle=settings['label_angle']
+                )
+            )
+            x_axis = alt.X(
+                f'{settings["value_column"]}:Q',
+                title=settings['value_column'],
+                axis=alt.Axis(
+                    labelFont=settings['font_family'],
+                    labelFontSize=settings['font_size'],
+                    titleFont=settings['font_family'],
+                    titleFontSize=settings['font_size']
+                )
+            )
+
+        # Create base chart
+        base = alt.Chart(df_sorted).mark_bar(
+            cornerRadiusTopLeft=settings['corner_radius'],
+            cornerRadiusTopRight=settings['corner_radius'],
+            cornerRadiusBottomLeft=settings['corner_radius'],
+            cornerRadiusBottomRight=settings['corner_radius']
+        ).encode(
+            x=x_axis,
+            y=y_axis
+        )
+
+        # Apply color settings
+        if settings['color_type'] == 'Solid':
+            chart = base.encode(color=alt.value(settings['solid_color']))
+        else:
+            # Add normalized position for gradient
+            df_sorted['normalized_value'] = (df_sorted[settings['value_column']] - 
+                                           df_sorted[settings['value_column']].min()) / \
+                                          (df_sorted[settings['value_column']].max() - 
+                                           df_sorted[settings['value_column']].min())
+            
+            chart = alt.Chart(df_sorted).mark_bar(
+                cornerRadiusTopLeft=settings['corner_radius'],
+                cornerRadiusTopRight=settings['corner_radius'],
+                cornerRadiusBottomLeft=settings['corner_radius'],
+                cornerRadiusBottomRight=settings['corner_radius']
+            ).encode(
+                x=x_axis,
+                y=y_axis,
+                color=alt.Color(
+                    'normalized_value:Q',
+                    scale=alt.Scale(range=[settings['gradient_start'], settings['gradient_end']]),
+                    legend=None
+                )
+            )
+
+        # Add value labels if enabled
+        if settings['show_labels']:
+            if settings['orientation'] == "vertical":
+                text = base.mark_text(
+                    align='center',
+                    baseline='bottom',
+                    dy=-5,
+                    fontSize=settings['font_size'],
+                    font=settings['font_family']
+                ).encode(
+                    text=alt.Text(f'{settings["value_column"]}:Q', format='.0f')
+                )
+            else:
+                text = base.mark_text(
+                    align='left',
+                    baseline='middle',
+                    dx=5,
+                    fontSize=settings['font_size'],
+                    font=settings['font_family']
+                ).encode(
+                    text=alt.Text(f'{settings["value_column"]}:Q', format='.0f')
+                )
+            chart = alt.layer(chart, text)
+
+        return chart.properties(
+            width=800,
+            height=500
+        ).configure_view(
+            strokeWidth=0
+        ).configure_axis(
+            grid=False
+        )
+    
+    except Exception as e:
+        st.error(f"Error creating bar chart: {str(e)}")
+        return None
+
+def create_pie_chart(df, settings):
+    """Create pie chart with improved styling"""
+    try:
+        # Process data
+        df = process_data(df, settings)
+        if df is None:
+            return None
+        
+        fig = go.Figure(data=[go.Pie(
+            labels=df[settings['category_column']],
+            values=df[settings['value_column']],
+            textfont=dict(
+                family=settings['font_family'],
+                size=settings['font_size']
+            ),
+            marker=dict(
+                colors=getattr(px.colors.qualitative, settings['color_scheme'])
+            ),
+            textinfo='percent+label' if settings['show_labels'] else 'percent'
+        )])
+        
+        fig.update_layout(
+            font=dict(
+                family=settings['font_family'],
+                size=settings['font_size']
+            ),
+            showlegend=settings['show_legend']
+        )
+        
+        return fig
+    
+    except Exception as e:
+        st.error(f"Error creating pie chart: {str(e)}")
+        return None
+
+def create_donut_chart(df, settings):
+    """Create donut chart with customizable settings"""
+    try:
+        # Process data
+        df = process_data(df, settings)
+        if df is None:
+            return None
+        
+        fig = go.Figure(data=[go.Pie(
+            labels=df[settings['category_column']],
+            values=df[settings['value_column']],
+            hole=settings['hole_size'],
+            textfont=dict(
+                family=settings['font_family'],
+                size=settings['font_size']
+            ),
+            marker=dict(
+                colors=getattr(px.colors.qualitative, settings['color_scheme']),
+                line=dict(color='white', width=settings['segment_spacing'])
+            ),
+            textinfo='percent+label' if settings['show_labels'] else 'percent'
+        )])
+        
+        fig.update_layout(
+            font=dict(
+                family=settings['font_family'],
+                size=settings['font_size']
+            ),
+            showlegend=settings['show_legend']
+        )
+        
+        return fig
+    
+    except Exception as e:
+        st.error(f"Error creating donut chart: {str(e)}")
+        return None
+
+def create_line_chart(df, settings):
+    """Create line chart with improved styling"""
+    try:
+        # Process data
+        df = process_data(df, settings)
+        if df is None:
+            return None
+        
+        if settings['sort_data']:
+            df = df.sort_values(by=[settings['category_column']])
+        
+        chart = alt.Chart(df).mark_line(
+            point=settings['show_points']
+        ).encode(
+            x=alt.X(
+                f'{settings["category_column"]}:N',
+                title=settings['category_column'],
+                axis=alt.Axis(
+                    labelFont=settings['font_family'],
+                    labelFontSize=settings['font_size'],
+                    titleFont=settings['font_family'],
+                    titleFontSize=settings['font_size']
+                )
+            ),
+            y=alt.Y(
+                f'{settings["value_column"]}:Q',
+                title=settings['value_column'],
+                axis=alt.Axis(
+                    labelFont=settings['font_family'],
+                    labelFontSize=settings['font_size'],
+                    titleFont=settings['font_family'],
+                    titleFontSize=settings['font_size']
+                )
+            ),
+            color=alt.value(settings['line_color'])
+        )
+
+        if settings['show_labels']:
+            text = chart.mark_text(
+                align='center',
+                baseline='bottom',
+                dy=-5,
+                fontSize=settings['font_size'],
+                font=settings['font_family']
+            ).encode(
+                text=alt.Text(f'{settings["value_column"]}:Q', format='.0f')
+            )
+            chart = alt.layer(chart, text)
+
+        return chart.properties(
+            width=800,
+            height=500
+        ).configure_view(
+            strokeWidth=0
+        ).configure_axis(
+            grid=False
+        )
+    
+    except Exception as e:
+        st.error(f"Error creating line chart: {str(e)}")
+        return None
+
+def create_area_chart(df, settings):
+    """Create area chart with smooth line option"""
+    try:
+        # Process data
+        df = process_data(df, settings)
+        if df is None:
+            return None
+        
+        if settings['sort_data']:
+            df = df.sort_values(by=[settings['category_column']])
+        
+        chart = alt.Chart(df).mark_area(
+            opacity=settings['area_opacity'],
+            interpolate=settings['interpolation']
+        ).encode(
+            x=alt.X(
+                f'{settings["category_column"]}:N',
+                title=settings['category_column'],
+                axis=alt.Axis(
+                    labelFont=settings['font_family'],
+                    labelFontSize=settings['font_size'],
+                    titleFont=settings['font_family'],
+                    titleFontSize=settings['font_size']
+                )
+            ),
+            y=alt.Y(
+                f'{settings["value_column"]}:Q',
+                title=settings['value_column'],
+                axis=alt.Axis(
+                    labelFont=settings['font_family'],
+                    labelFontSize=settings['font_size'],
+                    titleFont=settings['font_family'],
+                    titleFontSize=settings['font_size']
+                )
+            ),
+            color=alt.value(settings['area_color'])
+        )
+
+        if settings['show_line']:
+            line = alt.Chart(df).mark_line(
+                color=settings['line_color'],
+                strokeWidth=settings['line_width']
+            ).encode(
+                x=f'{settings["category_column"]}:N',
+                y=f'{settings["value_column"]}:Q'
+            )
+            chart = alt.layer(chart, line)
+
+        return chart.properties(
+            width=800,
+            height=500
+        ).configure_view(
+            strokeWidth=0
+        ).configure_axis(
+            grid=False
+        )
+    
+    except Exception as e:
+        st.error(f"Error creating area chart: {str(e)}")
+        return None
+
+def create_radar_chart(df, settings):
+    """Create radar chart"""
+    try:
+        # Process data
+        df = process_data(df, settings)
+        if df is None:
+            return None
+        
+        categories = df[settings['category_column']].tolist()
+        values = df[settings['value_column']].tolist()
+        
+        fig = go.Figure()
+        
+        fig.add_trace(go.Scatterpolar(
+            r=values + [values[0]],  # Complete the circle
+            theta=categories + [categories[0]],  # Complete
+            fill='toself',
+            fillcolor=settings['fill_color'],
+            opacity=settings['fill_opacity'],
+            line=dict(
+                color=settings['line_color'],
+                width=settings['line_width']
+            )
+        ))
+        
+        fig.update_layout(
+            polar=dict(
+                radialaxis=dict(
+                    visible=True,
+                    range=[0, max(values) * 1.1]
+                )
+            ),
+            showlegend=False,
+            font=dict(
+                family=settings['font_family'],
+                size=settings['font_size']
+            )
+        )
+        
+        return fig
+    
+    except Exception as e:
+        st.error(f"Error creating radar chart: {str(e)}")
+        return None
+
+def create_scatter_plot(df, settings):
+    """Create scatter plot with customization options"""
+    try:
+        fig = px.scatter(
+            df,
+            x=settings['x_column'],
+            y=settings['y_column'],
+            color=settings['color_column'] if settings['use_color'] else None,
+            size=settings['size_column'] if settings['use_size'] else None,
+            hover_data=[settings['hover_column']] if settings['show_hover'] else None,
+            color_continuous_scale=settings['color_scale'] if settings['use_color'] else None,
+            opacity=settings['point_opacity']
+        )
+        
+        fig.update_traces(
+            marker=dict(
+                size=settings['marker_size'] if not settings['use_size'] else None,
+                line=dict(width=settings['marker_line_width'])
+            )
+        )
+        
+        fig.update_layout(
+            font=dict(
+                family=settings['font_family'],
+                size=settings['font_size']
+            )
+        )
+        
+        return fig
+    
+    except Exception as e:
+        st.error(f"Error creating scatter plot: {str(e)}")
+        return None
+
+def create_histogram(df, settings):
+    """Create histogram with customization options"""
+    try:
+        fig = go.Figure(data=[go.Histogram(
+            x=df[settings['value_column']],
+            nbinsx=settings['num_bins'],
+            opacity=settings['bar_opacity'],
+            marker_color=settings['bar_color'],
+            histnorm=settings['normalization']
+        )])
+        
+        fig.update_layout(
+            bargap=settings['bar_gap'],
+            font=dict(
+                family=settings['font_family'],
+                size=settings['font_size']
+            ),
+            xaxis_title=settings['value_column'],
+            yaxis_title='Count' if settings['normalization'] == '' else 'Frequency'
+        )
+        
+        return fig
+    
+    except Exception as e:
+        st.error(f"Error creating histogram: {str(e)}")
+        return None
+
+def create_box_plot(df, settings):
+    """Create box plot with customization options"""
+    try:
+        fig = go.Figure()
+        
+        for category in df[settings['category_column']].unique():
+            values = df[df[settings['category_column']] == category][settings['value_column']]
+            
+            fig.add_trace(go.Box(
+                y=values,
+                name=str(category),
+                boxpoints=settings['point_display'],
+                marker_color=settings['box_color'],
+                line_color=settings['line_color'],
+                boxmean=settings['show_mean']
+            ))
+        
+        fig.update_layout(
+            font=dict(
+                family=settings['font_family'],
+                size=settings['font_size']
+            ),
+            showlegend=settings['show_legend']
+        )
+        
+        return fig
+    
+    except Exception as e:
+        st.error(f"Error creating box plot: {str(e)}")
+        return None
+
+def create_treemap(df, settings):
+    """Create treemap with customization options"""
+    try:
+        fig = px.treemap(
+            df,
+            path=[settings['hierarchy_column']],
+            values=settings['value_column'],
+            color=settings['color_column'] if settings['use_color'] else None,
+            color_continuous_scale=settings['color_scale'] if settings['use_color'] else None
+        )
+        
+        fig.update_traces(
+            marker=dict(
+                line=dict(
+                    width=settings['border_width'],
+                    color=settings['border_color']
+                )
+            ),
+            textfont=dict(
+                family=settings['font_family'],
+                size=settings['font_size']
+            )
+        )
+        
+        return fig
+    
+    except Exception as e:
+        st.error(f"Error creating treemap: {str(e)}")
+        return None
+
+def get_common_settings(columns):
+    """Get common chart settings"""
+    settings = {}
+    
+    st.sidebar.subheader("Data Settings")
+    settings['category_column'] = st.sidebar.selectbox("Category Column", columns)
+    settings['value_column'] = st.sidebar.selectbox("Value Column", columns)
+    
+    settings['aggregation'] = st.sidebar.selectbox(
+        "Aggregation",
+        ['None', 'Sum', 'Average', 'Count', 'Count (Non-Empty)']
+    )
+    
+    # Filter settings
+    settings['filter_type'] = st.sidebar.selectbox(
+        "Filter Type",
+        ['None', 'Top N', 'Bottom N']
+    )
+    
+    if settings['filter_type'] != 'None':
+        max_n = len(st.session_state.df)
+        settings['filter_n'] = st.sidebar.number_input(
+            f"Number of {settings['filter_type']} items",
+            min_value=1,
+            max_value=max_n,
+            value=min(5, max_n)
+        )
+    
+    # Appearance settings
+    st.sidebar.subheader("Appearance Settings")
+    settings['font_family'] = st.sidebar.selectbox("Font", st.session_state.system_fonts)
+    settings['font_size'] = st.sidebar.number_input("Font Size", 8, 24, 12)
+    settings['show_labels'] = st.sidebar.checkbox("Show Labels", True)
+    
+    return settings
+
+def get_bar_settings():
+    """Get bar chart specific settings"""
+    settings = {}
+    
+    st.sidebar.subheader("Bar Chart Settings")
+    settings['orientation'] = st.sidebar.radio("Orientation", ["vertical", "horizontal"])
+    settings['label_angle'] = st.sidebar.select_slider(
+        "Category Label Angle",
+        options=[0, 45, 90, -45, -90],
+        value=0
+    )
+    
+    settings['color_type'] = st.sidebar.radio(
+        "Color Type",
+        ["Solid", "Individual Gradient", "Whole Gradient"]
+    )
+    
+    if settings['color_type'] == 'Solid':
+        settings['solid_color'] = st.sidebar.color_picker("Bar Color", "#1f77b4")
+    else:
+        settings['gradient_start'] = st.sidebar.color_picker("Start Color", "#1f77b4")
+        settings['gradient_end'] = st.sidebar.color_picker("End Color", "#7fdbff")
+    
+    settings['corner_radius'] = st.sidebar.number_input("Corner Radius", 0, 50, 0)
+    
+    return settings
+
+def get_pie_settings():
+    """Get pie chart specific settings"""
+    settings = {}
+    
+    st.sidebar.subheader("Pie Chart Settings")
+    settings['show_legend'] = st.sidebar.checkbox("Show Legend", True)
+    settings['color_scheme'] = st.sidebar.selectbox(
+        "Color Scheme",
+        ['Set1', 'Set2', 'Set3', 'Pastel1', 'Pastel2']
+    )
+    
+    return settings
+
+def get_donut_settings():
+    """Get donut chart specific settings"""
+    settings = {}
+    
+    st.sidebar.subheader("Donut Chart Settings")
+    settings['hole_size'] = st.sidebar.slider("Hole Size", 0.0, 0.9, 0.5)
+    settings['segment_spacing'] = st.sidebar.slider("Segment Spacing", 0, 5, 2)
+    settings['show_legend'] = st.sidebar.checkbox("Show Legend", True)
+    settings['color_scheme'] = st.sidebar.selectbox(
+        "Color Scheme",
+        ['Set1', 'Set2', 'Set3', 'Pastel1', 'Pastel2']
+    )
+    
+    return settings
+
+def get_line_settings():
+    """Get line chart specific settings"""
+    settings = {}
+    
+    st.sidebar.subheader("Line Chart Settings")
+    settings['line_color'] = st.sidebar.color_picker("Line Color", "#1f77b4")
+    settings['show_points'] = st.sidebar.checkbox("Show Points", True)
+    settings['sort_data'] = st.sidebar.checkbox("Sort X-Axis", False)
+    
+    return settings
+
+def get_area_settings():
+    """Get area chart specific settings"""
+    settings = {}
+    
+    st.sidebar.subheader("Area Chart Settings")
+    settings['area_opacity'] = st.sidebar.slider("Area Opacity", 0.0, 1.0, 0.5)
+    settings['area_color'] = st.sidebar.color_picker("Area Color", "#1f77b4")
+    settings['show_line'] = st.sidebar.checkbox("Show Line", True)
+    settings['line_color'] = st.sidebar.color_picker("Line Color", "#000000")
+    settings['line_width'] = st.sidebar.slider("Line Width", 1, 5, 2)
+    settings['interpolation'] = st.sidebar.selectbox(
+        "Line Style",
+        ['linear', 'basis', 'cardinal', 'step']
+    )
+    settings['sort_data'] = st.sidebar.checkbox("Sort X-Axis", False)
+    
+    return settings
+
+def get_radar_settings():
+    """Get radar chart specific settings"""
+    settings = {}
+    
+    st.sidebar.subheader("Radar Chart Settings")
+    settings['fill_color'] = st.sidebar.color_picker("Fill Color", "#1f77b4")
+    settings['fill_opacity'] = st.sidebar.slider("Fill Opacity", 0.0, 1.0, 0.5)
+    settings['line_color'] = st.sidebar.color_picker("Line Color", "#000000")
+    settings['line_width'] = st.sidebar.slider("Line Width", 1, 5, 2)
+    
+    return settings
+
+def get_scatter_settings(columns):
+    """Get scatter plot specific settings"""
+    settings = {}
+    
+    st.sidebar.subheader("Scatter Plot Settings")
+    settings['x_column'] = st.sidebar.selectbox("X-Axis Column", columns)
+    settings['y_column'] = st.sidebar.selectbox("Y-Axis Column", columns)
+    
+    settings['use_color'] = st.sidebar.checkbox("Use Color Mapping", False)
+    if settings['use_color']:
+        settings['color_column'] = st.sidebar.selectbox("Color Column", columns)
+        settings['color_scale'] = st.sidebar.selectbox(
+            "Color Scale",
+            ['Viridis', 'Plasma', 'Inferno', 'Magma']
+        )
+    
+    settings['use_size'] = st.sidebar.checkbox("Use Size Mapping", False)
+    if settings['use_size']:
+        settings['size_column'] = st.sidebar.selectbox("Size Column", columns)
+    else:
+        settings['marker_size'] = st.sidebar.slider("Marker Size", 5, 30, 10)
+    
+    settings['marker_line_width'] = st.sidebar.slider("Marker Line Width", 0, 5, 1)
+    settings['point_opacity'] = st.sidebar.slider("Point Opacity", 0.0, 1.0, 0.7)
+    
+    settings['show_hover'] = st.sidebar.checkbox("Show Hover Data", True)
+    if settings['show_hover']:
+        settings['hover_column'] = st.sidebar.selectbox("Hover Data Column", columns)
+    
+    return settings
+
+def get_histogram_settings():
+    """Get histogram specific settings"""
+    settings = {}
+    
+    st.sidebar.subheader("Histogram Settings")
+    settings['num_bins'] = st.sidebar.slider("Number of Bins", 5, 100, 30)
+    settings['bar_opacity'] = st.sidebar.slider("Bar Opacity", 0.0, 1.0, 0.7)
+    settings['bar_color'] = st.sidebar.color_picker("Bar Color", "#1f77b4")
+    settings['bar_gap'] = st.sidebar.slider("Bar Gap", 0.0, 0.5, 0.1)
+    settings['normalization'] = st.sidebar.selectbox(
+        "Normalization",
+        ['', 'percent', 'probability', 'density']
+    )
+    
+    return settings
+
+def get_box_settings():
+    """Get box plot specific settings"""
+    settings = {}
+    
+    st.sidebar.subheader("Box Plot Settings")
+    settings['point_display'] = st.sidebar.selectbox(
+        "Show Points",
+        ['all', 'outliers', 'suspected outliers', False]
+    )
+    settings['box_color'] = st.sidebar.color_picker("Box Color", "#1f77b4")
+    settings['line_color'] = st.sidebar.color_picker("Line Color", "#000000")
+    settings['show_mean'] = st.sidebar.checkbox("Show Mean", True)
+    settings['show_legend'] = st.sidebar.checkbox("Show Legend", True)
+    
+    return settings
+
+def get_treemap_settings(columns):
+    """Get treemap specific settings"""
+    settings = {}
+    
+    st.sidebar.subheader("Treemap Settings")
+    settings['hierarchy_column'] = st.sidebar.selectbox("Hierarchy Column", columns)
+    
+    settings['use_color'] = st.sidebar.checkbox("Use Color Mapping", False)
+    if settings['use_color']:
+        settings['color_column'] = st.sidebar.selectbox("Color Column", columns)
+        settings['color_scale'] = st.sidebar.selectbox(
+            "Color Scale",
+            ['Viridis', 'Plasma', 'Inferno', 'Magma']
+        )
+    
+    settings['border_width'] = st.sidebar.slider("Border Width", 0, 5, 1)
+    settings['border_color'] = st.sidebar.color_picker("Border Color", "#FFFFFF")
+    
+    return settings
+
+def get_chart_settings(chart_type):
+    """Get chart settings based on chart type"""
+    settings = {}
+    
+    if st.session_state.df is not None:
+        columns = list(st.session_state.df.columns)
+        
+        # Get common settings
+        settings.update(get_common_settings(columns))
+        
+        # Get chart-specific settings
+        if chart_type == 'bar':
+            settings.update(get_bar_settings())
+        elif chart_type == 'pie':
+            settings.update(get_pie_settings())
+        elif chart_type == 'donut':
+            settings.update(get_donut_settings())
+        elif chart_type == 'line':
+            settings.update(get_line_settings())
+        elif chart_type == 'area':
+            settings.update(get_area_settings())
+        elif chart_type == 'radar':
+            settings.update(get_radar_settings())
+        elif chart_type == 'scatter':
+            settings.update(get_scatter_settings(columns))
+        elif chart_type == 'histogram':
+            settings.update(get_histogram_settings())
+        elif chart_type == 'box':
+            settings.update(get_box_settings())
+        elif chart_type == 'treemap':
+            settings.update(get_treemap_settings(columns))
+        return settings
 
 def save_chart(chart, format_type, ppi=None, scale_factor=None):
     """Save chart using vl-convert-python"""
     try:
         import io
         import base64
-        from datetime import datetime
         
         # Try importing vl-convert
         try:
@@ -155,28 +839,23 @@ def save_chart(chart, format_type, ppi=None, scale_factor=None):
         # Create buffer for the chart
         if isinstance(chart, (alt.Chart, alt.LayerChart)):
             if format_type == 'html':
-                # Save as HTML with embedded dependencies
                 content = chart.to_html(inline=True)
                 mime_type = "text/html"
                 data = content
             elif format_type in ['svg', 'png']:
-                # Get the Vega-Lite spec
                 spec = chart.to_dict()
                 
                 if format_type == 'svg':
-                    # Convert to SVG
                     content = vlc.vegalite_to_svg(spec)
                     mime_type = "image/svg+xml"
                     data = content
                 else:  # png
-                    # Add PNG-specific options
                     vl_options = {}
                     if ppi is not None:
                         vl_options['ppi'] = ppi
                     if scale_factor is not None:
                         vl_options['scale_factor'] = scale_factor
-                        
-                    # Convert to PNG
+                    
                     content = vlc.vegalite_to_png(spec, **vl_options)
                     mime_type = "image/png"
                     data = base64.b64encode(content).decode()
@@ -205,381 +884,9 @@ def save_chart(chart, format_type, ppi=None, scale_factor=None):
             
     except Exception as e:
         return False, f"Error preparing chart for download: {str(e)}"
-    
-
-def create_bar_chart(df, settings):
-    """Create bar chart with improved gradient and corner radius control"""
-    # Process data first
-    df = process_data(df, settings)
-    
-    # Sort data
-    df_sorted = df.sort_values(by=settings['value_column'], ascending=False)
-    
-    # Configure axis label rotation
-    if settings['orientation'] == "vertical":
-        x_axis = alt.X(
-            f'{settings["category_column"]}:N',
-            title=settings['category_column'],
-            sort=df_sorted[settings['category_column']].tolist(),
-            axis=alt.Axis(
-                labelFont=settings['font_family'],
-                labelFontSize=settings['font_size'],
-                titleFont=settings['font_family'],
-                titleFontSize=settings['font_size'],
-                labelAngle=settings['label_angle']
-            )
-        )
-        y_axis = alt.Y(
-            f'{settings["value_column"]}:Q',
-            title=settings['value_column'],
-            axis=alt.Axis(
-                labelFont=settings['font_family'],
-                labelFontSize=settings['font_size'],
-                titleFont=settings['font_family'],
-                titleFontSize=settings['font_size']
-            )
-        )
-    else:  # horizontal
-        y_axis = alt.Y(
-            f'{settings["category_column"]}:N',
-            title=settings['category_column'],
-            sort=df_sorted[settings['category_column']].tolist(),
-            axis=alt.Axis(
-                labelFont=settings['font_family'],
-                labelFontSize=settings['font_size'],
-                titleFont=settings['font_family'],
-                titleFontSize=settings['font_size'],
-                labelAngle=settings['label_angle']
-            )
-        )
-        x_axis = alt.X(
-            f'{settings["value_column"]}:Q',
-            title=settings['value_column'],
-            axis=alt.Axis(
-                labelFont=settings['font_family'],
-                labelFontSize=settings['font_size'],
-                titleFont=settings['font_family'],
-                titleFontSize=settings['font_size']
-            )
-        )
-
-    # Create base chart with corner radius
-    base = alt.Chart(df_sorted).mark_bar(
-        cornerRadiusTopLeft=settings['corner_radius_top_left'],
-        cornerRadiusTopRight=settings['corner_radius_top_right'],
-        cornerRadiusBottomLeft=settings['corner_radius_bottom_left'],
-        cornerRadiusBottomRight=settings['corner_radius_bottom_right']
-    ).encode(
-        x=x_axis,
-        y=y_axis
-    )
-
-    # Apply color based on settings
-    if settings['color_type'] == 'Solid':
-        chart = base.encode(
-            color=alt.value(settings['solid_color'])
-        )
-    elif settings['color_type'] == 'Individual Gradient':
-        # Add normalized position for each category
-        df_sorted['normalized_value'] = (df_sorted[settings['value_column']] - 
-                                       df_sorted[settings['value_column']].min()) / \
-                                      (df_sorted[settings['value_column']].max() - 
-                                       df_sorted[settings['value_column']].min())
-        
-        chart = alt.Chart(df_sorted).transform_window(
-            rank='rank()',
-            sort=[alt.SortField(settings['value_column'], order='descending')]
-        ).mark_bar(
-            cornerRadiusTopLeft=settings['corner_radius_top_left'],
-            cornerRadiusTopRight=settings['corner_radius_top_right'],
-            cornerRadiusBottomLeft=settings['corner_radius_bottom_left'],
-            cornerRadiusBottomRight=settings['corner_radius_bottom_right']
-        ).encode(
-            x=x_axis,
-            y=y_axis,
-            color=alt.Color(
-                'normalized_value:Q',
-                scale=alt.Scale(range=[settings['gradient_start'], settings['gradient_end']]),
-                legend=None
-            )
-        )
-    else:  # Whole Gradient
-        df_sorted['color_index'] = range(len(df_sorted))
-        chart = base.encode(
-            color=alt.Color(
-                'color_index:Q',
-                scale=alt.Scale(
-                    domain=[0, len(df_sorted)-1],
-                    range=[settings['gradient_start'], settings['gradient_end']]
-                ),
-                legend=None
-            )
-        )
-
-    # Add value labels if enabled
-    if settings['show_labels']:
-        if settings['orientation'] == "vertical":
-            text = base.mark_text(
-                align='center',
-                baseline='bottom',
-                dy=-5,
-                fontSize=settings['font_size'],
-                font=settings['font_family']
-            ).encode(
-                text=alt.Text(f'{settings["value_column"]}:Q', format='.0f')
-            )
-        else:
-            text = base.mark_text(
-                align='left',
-                baseline='middle',
-                dx=5,
-                fontSize=settings['font_size'],
-                font=settings['font_family']
-            ).encode(
-                text=alt.Text(f'{settings["value_column"]}:Q', format='.0f')
-            )
-        chart = alt.layer(chart, text)
-
-    return chart.properties(
-        width=800,
-        height=500
-    ).configure_view(
-        strokeWidth=0
-    ).configure_axis(
-        grid=False
-    )
-
-
-def create_pie_chart(df, settings):
-    """Create pie chart with updated settings"""
-    # Process data first
-    df = process_data(df, settings)
-    
-    # Create figure with explicit font settings
-    fig = go.Figure(data=[go.Pie(
-        labels=df[settings['category_column']],
-        values=df[settings['value_column']],
-        textfont=dict(
-            family=settings['font_family'],
-            size=settings['font_size']
-        ),
-        marker_colors=getattr(px.colors.qualitative, settings['color_scheme']),
-        textinfo='percent+label' if settings['show_labels'] else 'percent'
-    )])
-    
-    # Update layout with font settings
-    fig.update_layout(
-        font=dict(
-            family=settings['font_family'],
-            size=settings['font_size']
-        ),
-        showlegend=settings['show_legend']
-    )
-    
-    return fig
-
-def create_line_chart(df, settings):
-    """Create line chart with settings"""
-    # Process data first
-    df = process_data(df, settings)
-    
-    # Sort if requested
-    if settings['sort_data']:
-        df = df.sort_values(by=[settings['category_column']])
-    
-    # Create chart
-    chart = alt.Chart(df).mark_line(
-        point=settings['show_points']
-    ).encode(
-        x=alt.X(
-            f'{settings["category_column"]}:N',
-            title=settings['category_column'],
-            axis=alt.Axis(
-                labelFont=settings['font_family'],
-                labelFontSize=settings['font_size'],
-                titleFont=settings['font_family'],
-                titleFontSize=settings['font_size']
-            )
-        ),
-        y=alt.Y(
-            f'{settings["value_column"]}:Q',
-            title=settings['value_column'],
-            axis=alt.Axis(
-                labelFont=settings['font_family'],
-                labelFontSize=settings['font_size'],
-                titleFont=settings['font_family'],
-                titleFontSize=settings['font_size']
-            )
-        ),
-        color=alt.value(settings['line_color'])
-    )
-
-    if settings['show_labels']:
-        text = chart.mark_text(
-            align='center',
-            baseline='bottom',
-            dy=-5,
-            fontSize=settings['font_size'],
-            font=settings['font_family']
-        ).encode(
-            text=alt.Text(f'{settings["value_column"]}:Q', format='.0f')
-        )
-        chart = alt.layer(chart, text)
-
-    return chart.properties(
-        width=800,
-        height=500
-    ).configure_view(
-        strokeWidth=0
-    ).configure_axis(
-        grid=False
-    )
-
-def create_sankey_chart(df, settings):
-    """Create sankey diagram with settings"""
-    # Process data first
-    df = process_data(df, settings)
-    
-    # Get unique nodes
-    source_nodes = df[settings['source_column']].unique()
-    target_nodes = df[settings['target_column']].unique()
-    all_nodes = list(set(np.concatenate([source_nodes, target_nodes])))
-    
-    # Create node dictionary
-    node_dict = {node: idx for idx, node in enumerate(all_nodes)}
-    
-    # Create figure
-    fig = go.Figure(data=[go.Sankey(
-        node=dict(
-            pad=15,
-            thickness=20,
-            line=dict(color="black", width=0.5),
-            label=all_nodes,
-            color="blue"
-        ),
-        link=dict(
-            source=[node_dict[src] for src in df[settings['source_column']]],
-            target=[node_dict[tgt] for tgt in df[settings['target_column']]],
-            value=df[settings['value_column']]
-        )
-    )])
-    
-    # Update layout
-    fig.update_layout(
-        title_text="Sankey Diagram",
-        font=dict(
-            family=settings['font_family'],
-            size=settings['font_size']
-        )
-    )
-    
-    return fig
-
-def get_chart_settings(chart_type):
-    """Get chart settings with unified radius option"""
-    settings = {}
-    
-    if st.session_state.df is not None:
-        columns = list(st.session_state.df.columns)
-        
-        st.sidebar.subheader("Data Settings")
-        settings['category_column'] = st.sidebar.selectbox("Category Column", columns)
-        settings['value_column'] = st.sidebar.selectbox("Value Column", columns)
-        
-        # Data Processing Settings
-        settings['aggregation'] = st.sidebar.selectbox(
-            "Aggregation",
-            ['None', 'Sum', 'Average', 'Count', 'Count (Non-Empty)']
-        )
-        
-        # Calculate max_n based on actual data
-        if settings['aggregation'] == 'None':
-            max_n = len(st.session_state.df)
-        else:
-            grouped = st.session_state.df.groupby(settings['category_column'])
-            max_n = len(grouped)
-        
-        settings['filter_type'] = st.sidebar.selectbox(
-            "Filter Type",
-            ['None', 'Top N', 'Bottom N']
-        )
-        
-        if settings['filter_type'] != 'None':
-            settings['filter_n'] = st.sidebar.number_input(
-                f"Number of {settings['filter_type']} items",
-                min_value=1,
-                max_value=max_n,
-                value=min(5, max_n)
-            )
-        
-        st.sidebar.subheader("Appearance Settings")
-        settings['font_family'] = st.sidebar.selectbox("Font", st.session_state.system_fonts)
-        settings['font_size'] = st.sidebar.number_input("Font Size", 8, 24, 12)
-        settings['show_labels'] = st.sidebar.checkbox("Show Labels", True)
-        
-        if chart_type == 'bar':
-            st.sidebar.subheader("Bar Chart Settings")
-            settings['orientation'] = st.sidebar.radio("Orientation", ["vertical", "horizontal"])
-            
-            # Label orientation
-            settings['label_angle'] = st.sidebar.select_slider(
-                "Category Label Angle",
-                options=[0, 45, 90, -45, -90],
-                value=0
-            )
-            
-            # Color settings
-            settings['color_type'] = st.sidebar.radio(
-                "Color Type",
-                ["Solid", "Individual Gradient", "Whole Gradient"]
-            )
-            
-            if settings['color_type'] == 'Solid':
-                settings['solid_color'] = st.sidebar.color_picker("Bar Color", "#1f77b4")
-            else:
-                settings['gradient_start'] = st.sidebar.color_picker("Start Color", "#1f77b4")
-                settings['gradient_end'] = st.sidebar.color_picker("End Color", "#7fdbff")
-            
-            # Corner radius settings
-            st.sidebar.subheader("Corner Radius")
-            radius_type = st.sidebar.radio("Radius Type", ["Unified", "Individual"])
-            
-            if radius_type == "Unified":
-                unified_radius = st.sidebar.number_input("Corner Radius", 0, 50, 0)
-                settings['corner_radius_top_left'] = unified_radius
-                settings['corner_radius_top_right'] = unified_radius
-                settings['corner_radius_bottom_left'] = unified_radius
-                settings['corner_radius_bottom_right'] = unified_radius
-            else:
-                col1, col2 = st.sidebar.columns(2)
-                with col1:
-                    settings['corner_radius_top_left'] = st.number_input("Top Left", 0, 50, 0)
-                    settings['corner_radius_bottom_left'] = st.number_input("Bottom Left", 0, 50, 0)
-                with col2:
-                    settings['corner_radius_top_right'] = st.number_input("Top Right", 0, 50, 0)
-                    settings['corner_radius_bottom_right'] = st.number_input("Bottom Right", 0, 50, 0)
-            
-        elif chart_type == 'pie':
-            settings['show_legend'] = st.sidebar.checkbox("Show Legend", True)
-            settings['color_scheme'] = st.sidebar.selectbox(
-                "Color Scheme",
-                ['Set1', 'Set2', 'Set3', 'Pastel1', 'Pastel2']
-            )
-            
-        elif chart_type == 'line':
-            settings['line_color'] = st.sidebar.color_picker("Line Color", "#1f77b4")
-            settings['show_points'] = st.sidebar.checkbox("Show Points", True)
-            settings['sort_data'] = st.sidebar.checkbox("Sort X-Axis", False)
-            
-        elif chart_type == 'sankey':
-            settings['source_column'] = st.sidebar.selectbox("Source Column", columns)
-            settings['target_column'] = st.sidebar.selectbox("Target Column", columns)
-            settings['value_column'] = st.sidebar.selectbox("Value Column", columns)
-    
-    return settings
-
 
 def main():
+    st.set_page_config(page_title="Chart Creator (Enhanced)", layout="wide")
     init_session_state()
     
     # Create two main columns for layout
@@ -604,10 +911,14 @@ def main():
                 st.error(f"Error loading file: {str(e)}")
 
         # Chart Type Selection
+        chart_types = [
+            'bar', 'pie', 'donut', 'line', 'area', 'radar',
+            'scatter', 'histogram', 'box', 'treemap'
+        ]
         chart_type = st.selectbox(
             "Select Chart Type",
-            ['bar', 'pie', 'line', 'sankey'],
-            index=['bar', 'pie', 'line', 'sankey'].index(st.session_state.chart_type)
+            chart_types,
+            index=chart_types.index(st.session_state.chart_type)
         )
         st.session_state.chart_type = chart_type
         
@@ -663,7 +974,6 @@ def main():
                             )
                         else:
                             st.error(result)
-
     
     # Right column - Chart Preview
     with right_col:
@@ -675,16 +985,44 @@ def main():
                 # Create appropriate chart
                 if chart_type == 'bar':
                     chart = create_bar_chart(st.session_state.df, settings)
-                    st.altair_chart(chart, use_container_width=True)
+                    if chart:
+                        st.altair_chart(chart, use_container_width=True)
                 elif chart_type == 'pie':
                     chart = create_pie_chart(st.session_state.df, settings)
-                    st.plotly_chart(chart, use_container_width=True)
+                    if chart:
+                        st.plotly_chart(chart, use_container_width=True)
+                elif chart_type == 'donut':
+                    chart = create_donut_chart(st.session_state.df, settings)
+                    if chart:
+                        st.plotly_chart(chart, use_container_width=True)
                 elif chart_type == 'line':
                     chart = create_line_chart(st.session_state.df, settings)
-                    st.altair_chart(chart, use_container_width=True)
-                elif chart_type == 'sankey':
-                    chart = create_sankey_chart(st.session_state.df, settings)
-                    st.plotly_chart(chart, use_container_width=True)
+                    if chart:
+                        st.altair_chart(chart, use_container_width=True)
+                elif chart_type == 'area':
+                    chart = create_area_chart(st.session_state.df, settings)
+                    if chart:
+                        st.altair_chart(chart, use_container_width=True)
+                elif chart_type == 'radar':
+                    chart = create_radar_chart(st.session_state.df, settings)
+                    if chart:
+                        st.plotly_chart(chart, use_container_width=True)
+                elif chart_type == 'scatter':
+                    chart = create_scatter_plot(st.session_state.df, settings)
+                    if chart:
+                        st.plotly_chart(chart, use_container_width=True)
+                elif chart_type == 'histogram':
+                    chart = create_histogram(st.session_state.df, settings)
+                    if chart:
+                        st.plotly_chart(chart, use_container_width=True)
+                elif chart_type == 'box':
+                    chart = create_box_plot(st.session_state.df, settings)
+                    if chart:
+                        st.plotly_chart(chart, use_container_width=True)
+                elif chart_type == 'treemap':
+                    chart = create_treemap(st.session_state.df, settings)
+                    if chart:
+                        st.plotly_chart(chart, use_container_width=True)
                 
                 st.session_state.current_chart = chart
                 
