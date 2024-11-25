@@ -885,95 +885,108 @@ def save_chart(chart, format_type, ppi=None, scale_factor=None):
     except Exception as e:
         return False, f"Error preparing chart for download: {str(e)}"
 
-def main():
-    st.set_page_config(page_title="Chart Creator (Enhanced)", layout="wide")
-    init_session_state()
-    
-    # Create two main columns for layout
-    left_col, right_col = st.columns([1, 3])
-    
-    # Left column - Controls
-    with left_col:
-        st.title("Chart Creator")
+def save_chart(chart, format_type, ppi=None, scale_factor=None):
+    """Save chart using vl-convert-python"""
+    try:
+        import io
+        import base64
         
-        # File Upload
-        uploaded_file = st.file_uploader("Upload Data File", type=['csv', 'xlsx', 'xls'])
-        if uploaded_file is not None:
-            try:
-                if uploaded_file.name.endswith('.csv'):
-                    st.session_state.df = pd.read_csv(uploaded_file)
-                else:
-                    st.session_state.df = pd.read_excel(uploaded_file)
-                st.success("File loaded successfully!")
-                with st.expander("Data Preview"):
-                    st.dataframe(st.session_state.df.head())
-            except Exception as e:
-                st.error(f"Error loading file: {str(e)}")
+        # Try importing vl-convert
+        try:
+            import vl_convert as vlc
+        except ImportError:
+            return False, """Error: Please install vl-convert-python for image export.
+            Run: pip install vl-convert-python"""
 
-        # Chart Type Selection
-        chart_types = [
-            'bar', 'pie', 'donut', 'line', 'area', 'radar',
-            'scatter', 'histogram', 'box', 'treemap'
-        ]
-        chart_type = st.selectbox(
-            "Select Chart Type",
-            chart_types,
-            index=chart_types.index(st.session_state.chart_type)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"chart_{timestamp}.{format_type}"
+
+        # Create buffer for the chart
+        if isinstance(chart, (alt.Chart, alt.LayerChart)):
+            if format_type == 'html':
+                content = chart.to_html(inline=True)
+                mime_type = "text/html"
+                data = content
+            elif format_type in ['svg', 'png']:
+                spec = chart.to_dict()
+                
+                if format_type == 'svg':
+                    content = vlc.vegalite_to_svg(spec)
+                    mime_type = "image/svg+xml"
+                    data = content
+                else:  # png
+                    vl_options = {}
+                    if ppi is not None:
+                        vl_options['ppi'] = ppi
+                    if scale_factor is not None:
+                        vl_options['scale_factor'] = scale_factor
+                    
+                    content = vlc.vegalite_to_png(spec, **vl_options)
+                    mime_type = "image/png"
+                    data = base64.b64encode(content).decode()
+        else:  # Plotly chart
+            if format_type == 'html':
+                buffer = io.StringIO()
+                chart.write_html(buffer)
+                buffer.seek(0)
+                data = buffer.getvalue()
+                mime_type = "text/html"
+            else:  # svg or png
+                buffer = io.BytesIO()
+                if format_type == 'svg':
+                    chart.write_image(buffer, format='svg')
+                    mime_type = "image/svg+xml"
+                else:
+                    chart.write_image(buffer, format='png')
+                    mime_type = "image/png"
+                buffer.seek(0)
+                data = base64.b64encode(buffer.getvalue()).decode()
+
+        # Return all necessary information for the download
+        return True, data, filename, mime_type
+            
+    except Exception as e:
+        return False, None, None, f"Error preparing chart for download: {str(e)}"
+
+# Update the download section in main():
+    # Save options
+    if st.session_state.df is not None:
+        st.write("### Export Options")
+        format_type = st.selectbox(
+            "Select Format",
+            ['html', 'svg', 'png']
         )
-        st.session_state.chart_type = chart_type
         
-        # Save options
-        if st.session_state.df is not None:
-            st.write("### Export Options")
-            format_type = st.selectbox(
-                "Select Format",
-                ['html', 'svg', 'png']
+        # PNG options
+        if format_type == 'png':
+            col1, col2 = st.columns(2)
+            with col1:
+                ppi = st.number_input("Resolution (PPI)", 
+                                    min_value=72, 
+                                    max_value=300, 
+                                    value=72,
+                                    help="Pixels per inch (72 is default)")
+            with col2:
+                scale_factor = st.number_input("Scale Factor",
+                                            min_value=0.1,
+                                            max_value=5.0,
+                                            value=1.0,
+                                            step=0.1,
+                                            help="Size multiplier (1.0 is default)")
+        
+        if st.session_state.current_chart:
+            download_button = st.download_button(
+                label="Download Chart",
+                data=lambda: save_chart(
+                    st.session_state.current_chart,
+                    format_type,
+                    ppi=ppi if format_type == 'png' else None,
+                    scale_factor=scale_factor if format_type == 'png' else None
+                )[1],
+                file_name=f"chart_{datetime.now().strftime('%Y%m%d_%H%M%S')}.{format_type}",
+                mime=f"{'text/html' if format_type == 'html' else f'image/{format_type}'}",
+                use_container_width=True
             )
-            
-            # PNG options
-            if format_type == 'png':
-                col1, col2 = st.columns(2)
-                with col1:
-                    ppi = st.number_input("Resolution (PPI)", 
-                                        min_value=72, 
-                                        max_value=300, 
-                                        value=72,
-                                        help="Pixels per inch (72 is default)")
-                with col2:
-                    scale_factor = st.number_input("Scale Factor",
-                                                min_value=0.1,
-                                                max_value=5.0,
-                                                value=1.0,
-                                                step=0.1,
-                                                help="Size multiplier (1.0 is default)")
-            
-            if st.session_state.current_chart:
-                if st.button("Download Chart", use_container_width=True):
-                    with st.spinner('Preparing download...'):
-                        if format_type == 'png':
-                            success, result = save_chart(
-                                st.session_state.current_chart, 
-                                format_type,
-                                ppi=ppi,
-                                scale_factor=scale_factor
-                            )
-                        else:
-                            success, result = save_chart(
-                                st.session_state.current_chart, 
-                                format_type
-                            )
-                        
-                        if success:
-                            data, filename, mime_type = result
-                            st.download_button(
-                                label=f"Click to download {format_type.upper()}",
-                                data=data,
-                                file_name=filename,
-                                mime=mime_type,
-                                use_container_width=True
-                            )
-                        else:
-                            st.error(result)
     
     # Right column - Chart Preview
     with right_col:
