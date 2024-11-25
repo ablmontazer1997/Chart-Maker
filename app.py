@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import altair as alt
+from altair.utils.data import MaxRowsError
 import numpy as np
 import matplotlib.font_manager as fm
 import plotly.graph_objects as go
@@ -8,6 +9,27 @@ import plotly.express as px
 from plotly.subplots import make_subplots
 import os
 from datetime import datetime
+
+
+def setup_altair():
+    """Configure Altair for handling large datasets"""
+    try:
+        # Try to enable vegafusion transformer
+        alt.data_transformers.enable('vegafusion')
+    except ValueError:
+        try:
+            # Fallback to enable vega dataset
+            alt.data_transformers.enable('default')
+            # Increase max rows limit
+            alt.data_transformers.disable_max_rows()
+        except:
+            # If all else fails, set a higher row limit
+            alt.data_transformers.enable(
+                'default',
+                max_rows=None
+            )
+
+
 
 def load_custom_fonts():
     """Load custom fonts from the fonts directory"""
@@ -877,8 +899,11 @@ def save_chart(chart, format_type, ppi=None, scale_factor=None):
 
 
 def main():
-    st.set_page_config(page_title="Chart Creator (Enhanced)", layout="wide")
+    setup_altair()
+    
+    st.set_page_config(page_title="Chart Creator", layout="wide")
     init_session_state()
+
     
     # Create two main columns for layout
     left_col, right_col = st.columns([1, 3])
