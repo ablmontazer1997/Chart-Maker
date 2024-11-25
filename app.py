@@ -1039,20 +1039,6 @@ def main():
     # Right column - Chart Preview
     with right_col:
         if st.session_state.df is not None:
-            # Add white background to the preview area
-            st.markdown(
-                """
-                <style>
-                    .stMarkdown, .element-container div {
-                        background-color: white;
-                        padding: 1rem;
-                        border-radius: 0.5rem;
-                    }
-                </style>
-                """,
-                unsafe_allow_html=True
-            )
-            
             try:
                 # Get settings
                 settings = get_chart_settings(chart_type)
@@ -1066,7 +1052,38 @@ def main():
                     chart = create_pie_chart(st.session_state.df, settings)
                     if chart:
                         st.plotly_chart(chart, use_container_width=True)
-                # ... (rest of the chart type conditions)
+                elif chart_type == 'donut':
+                    chart = create_donut_chart(st.session_state.df, settings)
+                    if chart:
+                        st.plotly_chart(chart, use_container_width=True)
+                elif chart_type == 'line':
+                    chart = create_line_chart(st.session_state.df, settings)
+                    if chart:
+                        st.altair_chart(chart, use_container_width=True)
+                elif chart_type == 'area':
+                    chart = create_area_chart(st.session_state.df, settings)
+                    if chart:
+                        st.altair_chart(chart, use_container_width=True)
+                elif chart_type == 'radar':
+                    chart = create_radar_chart(st.session_state.df, settings)
+                    if chart:
+                        st.plotly_chart(chart, use_container_width=True)
+                elif chart_type == 'scatter':
+                    chart = create_scatter_plot(st.session_state.df, settings)
+                    if chart:
+                        st.plotly_chart(chart, use_container_width=True)
+                elif chart_type == 'histogram':
+                    chart = create_histogram(st.session_state.df, settings)
+                    if chart:
+                        st.plotly_chart(chart, use_container_width=True)
+                elif chart_type == 'box':
+                    chart = create_box_plot(st.session_state.df, settings)
+                    if chart:
+                        st.plotly_chart(chart, use_container_width=True)
+                elif chart_type == 'treemap':
+                    chart = create_treemap(st.session_state.df, settings)
+                    if chart:
+                        st.plotly_chart(chart, use_container_width=True)
                 
                 st.session_state.current_chart = chart
                 
