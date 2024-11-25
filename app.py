@@ -853,54 +853,75 @@ def save_chart(chart, format_type, ppi=None, scale_factor=None):
 
         # Create buffer for the chart
         if isinstance(chart, (alt.Chart, alt.LayerChart)):
-            if format_type == 'html':
-                content = chart.to_html(inline=True)
-                return content.encode('utf-8')
-            elif format_type in ['svg', 'png']:
-                try:
-                    # First try with vega format for VegaFusion
+            try:
+                if format_type == 'html':
+                    # For HTML, use format="vega" with to_html
+                    content = chart.to_html(inline=True, format="vega")
+                    return content.encode('utf-8')
+                elif format_type in ['svg', 'png']:
+                    # Use vega format for VegaFusion
                     spec = chart.to_dict(format="vega")
                     
                     if format_type == 'svg':
                         content = vlc.vega_to_svg(spec)
                         return content.encode('utf-8')
                     else:  # png
-                        vl_options = {}
-                        if ppi is not None:
-                            vl_options['ppi'] = ppi
-                        if scale_factor is not None:
-                            vl_options['scale_factor'] = scale_factor
+                        if ppi is not None or scale_factor is not None:
+                            # For PNG with custom settings, need to convert to pixels
+                            base_width = 800  # Default width
+                            base_height = 500  # Default height
+                            
+                            if scale_factor is not None:
+                                width = int(base_width * scale_factor)
+                                height = int(base_height * scale_factor)
+                            elif ppi is not None:
+                                # Convert inches to pixels based on PPI
+                                width = int((base_width / 72) * ppi)
+                                height = int((base_height / 72) * ppi)
+                            
+                            content = vlc.vega_to_png(spec, scale=width/base_width)
+                        else:
+                            content = vlc.vega_to_png(spec)
+                        return content
                         
-                        return vlc.vega_to_png(spec, **vl_options)
-                        
-                except Exception as vega_error:
-                    # If vega format fails, try vega-lite format
-                    try:
-                        # Temporarily disable VegaFusion for export
-                        current_transformer = alt.data_transformers.active
-                        alt.data_transformers.enable('default')
-                        alt.data_transformers.disable_max_rows()
-                        
+            except Exception as vega_error:
+                st.error(f"VegaFusion export error: {str(vega_error)}")
+                # Try disabling VegaFusion temporarily
+                try:
+                    # Temporarily disable VegaFusion
+                    current_transformer = alt.data_transformers.active
+                    alt.data_transformers.enable('default')
+                    alt.data_transformers.disable_max_rows()
+                    
+                    if format_type == 'html':
+                        content = chart.to_html(inline=True)
+                    else:
                         spec = chart.to_dict()
-                        
                         if format_type == 'svg':
                             content = vlc.vegalite_to_svg(spec)
                         else:  # png
-                            vl_options = {}
-                            if ppi is not None:
-                                vl_options['ppi'] = ppi
-                            if scale_factor is not None:
-                                vl_options['scale_factor'] = scale_factor
-                            content = vlc.vegalite_to_png(spec, **vl_options)
-                            
-                        # Restore VegaFusion
-                        alt.data_transformers.enable('vegafusion')
-                        return content if format_type == 'png' else content.encode('utf-8')
-                        
-                    except Exception as vegalite_error:
-                        st.error(f"Error exporting chart: {str(vegalite_error)}")
-                        return None
-                        
+                            if ppi is not None or scale_factor is not None:
+                                base_width = 800
+                                base_height = 500
+                                if scale_factor is not None:
+                                    width = int(base_width * scale_factor)
+                                    height = int(base_height * scale_factor)
+                                elif ppi is not None:
+                                    width = int((base_width / 72) * ppi)
+                                    height = int((base_height / 72) * ppi)
+                                content = vlc.vegalite_to_png(spec, scale=width/base_width)
+                            else:
+                                content = vlc.vegalite_to_png(spec)
+                    
+                    # Restore VegaFusion
+                    alt.data_transformers.enable('vegafusion')
+                    
+                    return content.encode('utf-8') if format_type in ['html', 'svg'] else content
+                    
+                except Exception as fallback_error:
+                    st.error(f"Export error: {str(fallback_error)}")
+                    return None
+                    
         else:  # Plotly chart
             if format_type == 'html':
                 buffer = io.StringIO()
@@ -911,17 +932,20 @@ def save_chart(chart, format_type, ppi=None, scale_factor=None):
                 buffer = io.BytesIO()
                 if format_type == 'svg':
                     chart.write_image(buffer, format='svg')
-                else:
-                    chart.write_image(buffer, format='png')
+                else:  # png
+                    if scale_factor is not None:
+                        width = int(800 * scale_factor)
+                        height = int(500 * scale_factor)
+                        chart.write_image(buffer, format='png', width=width, height=height)
+                    else:
+                        chart.write_image(buffer, format='png')
                 buffer.seek(0)
                 return buffer.getvalue()
             
     except Exception as e:
         st.error(f"Error preparing chart for download: {str(e)}")
         return None
-
-
-
+        
 
 def main():
     setup_altair()
