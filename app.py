@@ -836,68 +836,6 @@ def save_chart(chart, format_type, ppi=None, scale_factor=None):
             return False, """Error: Please install vl-convert-python for image export.
             Run: pip install vl-convert-python"""
 
-        # Create buffer for the chart
-        if isinstance(chart, (alt.Chart, alt.LayerChart)):
-            if format_type == 'html':
-                content = chart.to_html(inline=True)
-                mime_type = "text/html"
-                data = content
-            elif format_type in ['svg', 'png']:
-                spec = chart.to_dict()
-                
-                if format_type == 'svg':
-                    content = vlc.vegalite_to_svg(spec)
-                    mime_type = "image/svg+xml"
-                    data = content
-                else:  # png
-                    vl_options = {}
-                    if ppi is not None:
-                        vl_options['ppi'] = ppi
-                    if scale_factor is not None:
-                        vl_options['scale_factor'] = scale_factor
-                    
-                    content = vlc.vegalite_to_png(spec, **vl_options)
-                    mime_type = "image/png"
-                    data = base64.b64encode(content).decode()
-        else:  # Plotly chart
-            if format_type == 'html':
-                buffer = io.StringIO()
-                chart.write_html(buffer)
-                buffer.seek(0)
-                data = buffer.getvalue()
-                mime_type = "text/html"
-            else:  # svg or png
-                buffer = io.BytesIO()
-                if format_type == 'svg':
-                    chart.write_image(buffer, format='svg')
-                    mime_type = "image/svg+xml"
-                else:
-                    chart.write_image(buffer, format='png')
-                    mime_type = "image/png"
-                buffer.seek(0)
-                data = base64.b64encode(buffer.getvalue()).decode()
-
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"chart_{timestamp}.{format_type}"
-        
-        return True, (data, filename, mime_type)
-            
-    except Exception as e:
-        return False, f"Error preparing chart for download: {str(e)}"
-
-def save_chart(chart, format_type, ppi=None, scale_factor=None):
-    """Save chart using vl-convert-python"""
-    try:
-        import io
-        import base64
-        
-        # Try importing vl-convert
-        try:
-            import vl_convert as vlc
-        except ImportError:
-            return False, """Error: Please install vl-convert-python for image export.
-            Run: pip install vl-convert-python"""
-
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"chart_{timestamp}.{format_type}"
 
@@ -948,8 +886,45 @@ def save_chart(chart, format_type, ppi=None, scale_factor=None):
     except Exception as e:
         return False, None, None, f"Error preparing chart for download: {str(e)}"
 
-# Update the download section in main():
-    # Save options
+
+def main():
+    st.set_page_config(page_title="Chart Creator (Enhanced)", layout="wide")
+    init_session_state()
+    
+    # Create two main columns for layout
+    left_col, right_col = st.columns([1, 3])
+    
+    # Left column - Controls
+    with left_col:
+        st.title("Chart Creator")
+        
+        # File Upload
+        uploaded_file = st.file_uploader("Upload Data File", type=['csv', 'xlsx', 'xls'])
+        if uploaded_file is not None:
+            try:
+                if uploaded_file.name.endswith('.csv'):
+                    st.session_state.df = pd.read_csv(uploaded_file)
+                else:
+                    st.session_state.df = pd.read_excel(uploaded_file)
+                st.success("File loaded successfully!")
+                with st.expander("Data Preview"):
+                    st.dataframe(st.session_state.df.head())
+            except Exception as e:
+                st.error(f"Error loading file: {str(e)}")
+
+        # Chart Type Selection
+        chart_types = [
+            'bar', 'pie', 'donut', 'line', 'area', 'radar',
+            'scatter', 'histogram', 'box', 'treemap'
+        ]
+        chart_type = st.selectbox(
+            "Select Chart Type",
+            chart_types,
+            index=chart_types.index(st.session_state.chart_type)
+        )
+        st.session_state.chart_type = chart_type
+        
+        # Save options
     if st.session_state.df is not None:
         st.write("### Export Options")
         format_type = st.selectbox(
