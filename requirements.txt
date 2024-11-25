@@ -9,3 +9,4 @@ vl-convert-python==1.2.0
 kaleido==0.2.1
 openpyxl==3.1.2
 requests==2.31.0  # For downloading fonts
+vegafusion[embed]==1.4.5
