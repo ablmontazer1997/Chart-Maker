@@ -218,7 +218,8 @@ def create_bar_chart(df, settings):
 
         return chart.properties(
             width=800,
-            height=500
+            height=500,
+            background='white'
         ).configure_view(
             strokeWidth=0
         ).configure_axis(
@@ -255,7 +256,9 @@ def create_pie_chart(df, settings):
                 family=settings['font_family'],
                 size=settings['font_size']
             ),
-            showlegend=settings['show_legend']
+            showlegend=settings['show_legend'],
+            plot_bgcolor='white',
+            paper_bgcolor='white'
         )
         
         return fig
@@ -352,7 +355,8 @@ def create_line_chart(df, settings):
 
         return chart.properties(
             width=800,
-            height=500
+            height=500,
+            background='white'
         ).configure_view(
             strokeWidth=0
         ).configure_axis(
@@ -457,6 +461,7 @@ def create_radar_chart(df, settings):
                 )
             ),
             showlegend=False,
+            
             font=dict(
                 family=settings['font_family'],
                 size=settings['font_size']
