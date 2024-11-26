@@ -955,7 +955,7 @@ def main():
             st.write("### Export Options")
             format_type = st.selectbox(
                 "Select Format",
-                ['html', 'svg', 'png']
+                ['svg', 'html', 'png']
             )
             
             # PNG options
