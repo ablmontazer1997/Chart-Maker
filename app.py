@@ -641,7 +641,7 @@ def get_bar_settings():
     
     settings['color_type'] = st.sidebar.radio(
         "Color Type",
-        ["Solid", "Individual Gradient", "Whole Gradient"]
+        ["Solid", "Whole Gradient"]
     )
     
     if settings['color_type'] == 'Solid':
@@ -650,7 +650,7 @@ def get_bar_settings():
         settings['gradient_start'] = st.sidebar.color_picker("Start Color", "#1f77b4")
         settings['gradient_end'] = st.sidebar.color_picker("End Color", "#7fdbff")
     
-    settings['corner_radius'] = st.sidebar.number_input("Corner Radius", 10, 50, 0)
+    settings['corner_radius'] = st.sidebar.number_input("Corner Radius", 0, 50, 10)
     
     return settings
 
