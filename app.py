@@ -622,7 +622,7 @@ def get_common_settings(columns):
     # Appearance settings
     st.sidebar.subheader("Appearance Settings")
     settings['font_family'] = st.sidebar.selectbox("Font", st.session_state.system_fonts)
-    settings['font_size'] = st.sidebar.number_input("Font Size", 8, 24, 12)
+    settings['font_size'] = st.sidebar.number_input("Font Size", 8, 24, 16)
     settings['show_labels'] = st.sidebar.checkbox("Show Labels", True)
     
     return settings
