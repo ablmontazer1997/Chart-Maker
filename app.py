@@ -645,10 +645,10 @@ def get_bar_settings():
     )
     
     if settings['color_type'] == 'Solid':
-        settings['solid_color'] = st.sidebar.color_picker("Bar Color", "#1f77b4")
+        settings['solid_color'] = st.sidebar.color_picker("Bar Color", "#4BFBEC")
     else:
-        settings['gradient_start'] = st.sidebar.color_picker("Start Color", "#1f77b4")
-        settings['gradient_end'] = st.sidebar.color_picker("End Color", "#7fdbff")
+        settings['gradient_start'] = st.sidebar.color_picker("Start Color", "#79E4DA")
+        settings['gradient_end'] = st.sidebar.color_picker("End Color", "#024C45")
     
     settings['corner_radius'] = st.sidebar.number_input("Corner Radius", 0, 100, 15)
     
