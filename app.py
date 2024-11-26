@@ -650,7 +650,7 @@ def get_bar_settings():
         settings['gradient_start'] = st.sidebar.color_picker("Start Color", "#1f77b4")
         settings['gradient_end'] = st.sidebar.color_picker("End Color", "#7fdbff")
     
-    settings['corner_radius'] = st.sidebar.number_input("Corner Radius", 0, 50, 10)
+    settings['corner_radius'] = st.sidebar.number_input("Corner Radius", 0, 100, 15)
     
     return settings
 
